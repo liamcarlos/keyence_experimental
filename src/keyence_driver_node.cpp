@@ -1,7 +1,10 @@
-#include <ros/ros.h>
+//#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/header.hpp> 
 
 #include <pcl/point_types.h>
-#include <pcl_ros/point_cloud.h>
+#include <pcl_ros/point_cloud.hpp>
+#include <pcl_conversions/pcl_conversions.h>
 
 #include <limits>
 
@@ -14,8 +17,9 @@
 
 #include "boost/bind.hpp"
 #include "boost/ref.hpp"
+#include "boost/make_shared.hpp"
 
-#include "keyence_experimental/ChangeProgram.h"
+#include "keyence_interfaces/srv/change_program.hpp"
 
 // keyence protocol / profile related defines
 static const std::string KEYENCE_DEFAULT_TCP_PORT = "24691";
@@ -161,21 +165,21 @@ double getProgramSamplingRate(keyence::TcpClient& client, uint8_t program)
  * @brief Services external ROS requests to change the active program. Will reset
  * activity flag and sampling rate according to the settings of the new program.
  */
-bool changeProgramCallback(keyence_experimental::ChangeProgram::Request& req,
-                           keyence_experimental::ChangeProgram::Response& res,
+bool changeProgramCallback(keyence_interfaces::srv::ChangeProgram::Request& req,
+                           keyence_interfaces::srv::ChangeProgram::Response& res,
                            keyence::TcpClient& client, bool& active_flag,
-                           ros::Rate& rate)
+                           rclcpp::Rate& rate)
 {
   if (req.program_no > keyence::setting::max_program_index)
   {
-    ROS_ERROR("Rejecting program change request: Commanded program index %hhu is out of"
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Rejecting program change request: Commanded program index %hhu is out of"
               " the valid range %hhu to %hhu", req.program_no, keyence::setting::min_program_index,
               keyence::setting::max_program_index);
     res.code = res.ERROR_OUT_OF_RANGE;
     return true;
   }
 
-  ROS_INFO("Attempting to change keyence program to %hhd", req.program_no);
+  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Attempting to change keyence program to %hhd", req.program_no);
 
   try
   {
@@ -187,15 +191,15 @@ bool changeProgramCallback(keyence_experimental::ChangeProgram::Request& req,
     {
       active_flag = isProgramContinuouslyTriggered(client, req.program_no);
       double sample_rate = getProgramSamplingRate(client, req.program_no);
-      rate = ros::Rate(sample_rate);
+      rate = rclcpp::Rate(sample_rate);
 
-      ROS_INFO("Program successfully changed to %hhu with sample freq of %f and"
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Program successfully changed to %hhu with sample freq of %f and"
                " continuous sampling mode = %hhu", req.program_no, sample_rate,
                static_cast<uint8_t>(active_flag));
 
       if (sample_rate > 200.0)
       {
-        ROS_WARN("Note that when sampling above 200Hz this driver will likely not keep up");
+        RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "Note that when sampling above 200Hz this driver will likely not keep up");
       }
 
       res.code = res.SUCCESS;
@@ -209,7 +213,7 @@ bool changeProgramCallback(keyence_experimental::ChangeProgram::Request& req,
   } catch (const keyence::KeyenceException& e) // TODO: The exception safety here is suspect
   {                                            // We could fail on the setting reads after a
                                                // successful program change.
-    ROS_ERROR("Keyence threw exception while processing program change request: %s",
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Keyence threw exception while processing program change request: %s",
               e.what());
     res.code = res.ERROR_OTHER;
     return true;
@@ -221,8 +225,10 @@ bool changeProgramCallback(keyence_experimental::ChangeProgram::Request& req,
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "keyence_lj_driver");
-  ros::NodeHandle nh, pnh("~");
+  //ros::init(argc, argv, "keyence_lj_driver");
+  //ros::NodeHandle nh, pnh("~");
+  rclcpp::init(argc, argv);
+  auto node = rclcpp::Node::make_shared("keyence_lj_driver");
 
   // ros parameters
   std::string sensor_host;
@@ -231,17 +237,17 @@ int main(int argc, char** argv)
   double sample_rate;
 
   // check required parameters
-  if (!pnh.hasParam("controller_ip"))
+  if (!node->has_parameter("controller_ip"))
   {
-    ROS_FATAL("Parameter 'controller_ip' missing. Cannot continue.");
+    RCLCPP_FATAL(rclcpp::get_logger("rclcpp"), "Parameter 'controller_ip' missing. Cannot continue.");
     return -1;
   }
 
-  pnh.getParam("controller_ip", sensor_host);
-  pnh.param<std::string>("controller_port", sensor_port, KEYENCE_DEFAULT_TCP_PORT);
-  pnh.param<std::string>("frame_id", frame_id, DEFAULT_FRAME_ID);
+  node->get_parameter("controller_ip", sensor_host);
+  node->get_parameter_or("controller_port", sensor_port, KEYENCE_DEFAULT_TCP_PORT);
+  node->get_parameter_or("frame_id", frame_id, DEFAULT_FRAME_ID);
 
-  ROS_INFO("Attempting to connect to %s (TCP %s); expecting a single head attached to port A.",
+  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Attempting to connect to %s (TCP %s); expecting a single head attached to port A.",
            sensor_host.c_str(), sensor_port.c_str());
 
   // setup point cloud message (we reuse single one)
@@ -253,11 +259,12 @@ int main(int argc, char** argv)
   pc_msg->height = 1;
 
   // set up profile cloud publisher
-  ros::Publisher pub = nh.advertise<Cloud>("profiles", 100);
+  //ros::Publisher pub = nh.advertise<Cloud>("profiles", 100);
+  auto pub = node->create_publisher<Cloud>("profiles", 100);
 
   bool active_flag = true;
 
-  while (ros::ok())
+  while (rclcpp::ok())
   {
     try
     {
@@ -268,45 +275,45 @@ int main(int argc, char** argv)
       active_flag = isProgramContinuouslyTriggered(keyence, active_program);
       sample_rate = getProgramSamplingRate(keyence, active_program);
 
-      ROS_INFO("Connection established to Keyence controller.");
-      ROS_INFO("Beginning with program %hhu with a sampling rate of %f",
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Connection established to Keyence controller.");
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Beginning with program %hhu with a sampling rate of %f",
                active_program, sample_rate);
       if (!active_flag)
       {
-        ROS_INFO("Note that program %hhu is not configured for continuous sampling",
+        RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Note that program %hhu is not configured for continuous sampling",
                  active_program);
       }
 
-      ros::Rate sleeper (sample_rate);
+      rclcpp::Rate sleeper (sample_rate);
 
-      ros::ServiceServer program_server =
-          nh.advertiseService<keyence_experimental::ChangeProgram::Request,
-                              keyence_experimental::ChangeProgram::Response>(
+      rclcpp::ServiceBase program_server override=
+          node.advertiseService<keyence_interfaces::srv::ChangeProgram::Request,
+                              keyence_interfaces::srv::ChangeProgram::Response>(
               "change_program", boost::bind(changeProgramCallback, _1, _2, boost::ref(keyence),
                                             boost::ref(active_flag), boost::ref(sleeper)));
 
-      ROS_INFO("Keyence connection established");
-      ROS_INFO("Attempting to publish at %.2f Hz.", sample_rate);
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Keyence connection established");
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Attempting to publish at %.2f Hz.", sample_rate);
 
       // Main loop
       sleeper.reset();
-      while (ros::ok())
+      while (rclcpp::ok())
       {
         sleeper.sleep();
-        ros::spinOnce();
+        rclcpp::spin_some();
 
         // avoid interacting with sensor if there are no publishers
         // TODO: maybe we should actually always poll sensor, but just not
         //       publish anything (although unpacking + publishing is cheap)
         if (pub.getNumSubscribers() == 0)
         {
-          ROS_INFO_THROTTLE(60, "No (more) subscribers. Not polling sensor.");
+          RCLCPP_INFO_THROTTLE(rclcpp::get_logger("rclcpp"), 60, "No (more) subscribers. Not polling sensor.");
           continue;
         }
 
         if (!active_flag)
         {
-          ROS_INFO_THROTTLE(60, "Sensor is disabled via the 'activity flag'.");
+          RCLCPP_INFO_THROTTLE(rclcpp->get_logger("rclcpp"), 60, "Sensor is disabled via the 'activity flag'.");
           continue;
         }
 
@@ -317,7 +324,7 @@ int main(int argc, char** argv)
         // Check for success
         if (!resp.good())
         {
-          ROS_DEBUG_STREAM("Error code in header:\n" << resp.header);
+          PCL_DEBUG_STREAM("Error code in header:\n" << resp.header);
         }
         else
         {
@@ -325,28 +332,30 @@ int main(int argc, char** argv)
           pc_msg->points.clear();
           unpackProfileToPointCloud(resp.body.profile_info, resp.body.profile_points, *pc_msg, true);
 
+          //auto std_pc_msg = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(*pc_msg);
+
           // publish pointcloud
-          pub.publish(pc_msg);
+          pub->publish(*pc_msg);
         }
       } // end main loop
     }
     catch (const keyence::KeyenceException& ex)
     {
-      ROS_ERROR_STREAM("Keyence Exception Caught:\n" << ex.what());
-      ROS_ERROR_STREAM("Attempting reconnection after pause");
-      ros::Duration(1.0).sleep();
+      PCL_ERROR_STREAM("Keyence Exception Caught:\n" << ex.what());
+      PCL_ERROR_STREAM("Attempting reconnection after pause");
+      rclcpp::Rate(1.0).sleep();
     }
   }
 
   return 0;
 }
 
-int unpackProfileToPointCloud(const keyence::ProfileInformation& info,
+int unpackProfileToPointCloud(const keyence::ProfileInformation& info, std::shared_ptr<rclcpp::Node> node,
                               const std::vector<int32_t>& points, Cloud& msg, bool cnv_inf_pts)
 {
   // TODO: get proper timestamp from somewhere
   // pcl header stamps are in microseconds
-  msg.header.stamp = ros::Time::now().toNSec() / 1e3;
+  msg.header.stamp = node->now().nanoseconds() / 1e3;
   msg.width = info.num_profiles;
   cnv_inf_pts = true;
 
