@@ -1,9 +1,11 @@
 [![Build Status](https://travis-ci.com/ros-industrial/keyence_experimental.svg?branch=kinetic-devel)](https://travis-ci.com/ros-industrial/keyence_experimental)
 
-# keyence_experimental
+# keyence_experimental for ROS2
 A library for communicating with Keyence LJ-V series sensors over TCP/IP. 
 
 It has been tested on the Keyence LJ-V7080 at Southwest Research Institute.
+
+This Repo hosts an attempt at porting this library to ROS2.
 
 ## Organization
 This package is divided into two logical components:
