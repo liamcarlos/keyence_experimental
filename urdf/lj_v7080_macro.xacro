@@ -3,13 +3,7 @@
   <xacro:include filename="$(find keyence_experimental)/urdf/lj_v7080.gazebo.xacro"/>
   <xacro:macro name="lj_v7080" params="prefix sim_gazebo">
   <xacro:property name="ref_dist_a" value="0.08"/>
-  
-    <link name="base_link"/>
-    <joint name="base_to_frame" type="fixed">
-      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
-      <parent link="base_link"/>
-      <child link="${prefix}lj_v7080_frame"/>
-    </joint>
+ 
     <link name="${prefix}lj_v7080_frame">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
