@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro">
   <xacro:include filename="$(find keyence_experimental)/urdf/lj_v7080.gazebo.xacro"/>
-  <xacro:macro name="lj_v7080" params="prefix">
+  <xacro:macro name="lj_v7080" params="prefix sim_gazebo">
   <xacro:property name="ref_dist_a" value="0.08"/>
   
     <link name="base_link"/>
