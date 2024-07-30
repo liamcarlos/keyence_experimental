@@ -1,8 +1,15 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro">
+  <xacro:include filename="$(find keyence_experimental)/urdf/lj_v7080.gazebo.xacro"/>
   <xacro:macro name="lj_v7080" params="prefix">
   <xacro:property name="ref_dist_a" value="0.08"/>
-
+  
+    <link name="base_link"/>
+    <joint name="base_to_frame" type="fixed">
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <parent link="base_link"/>
+      <child link="${prefix}lj_v7080_frame"/>
+    </joint>
     <link name="${prefix}lj_v7080_frame">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -27,10 +34,13 @@
     <!-- Optical frame -->
     <link name="${prefix}lj_v7080_optical_frame"/>
     <joint name="optical_frame" type="fixed">
-      <origin xyz="0 0 ${ref_dist_a}" rpy="0 0 0"/>
-      <parent link="${prefix}lj_v7080_optical_frame"/>
-      <child link="${prefix}lj_v7080_frame"/>
+      <origin xyz="0 0 ${-ref_dist_a}" rpy="0 0 0"/>
+      <parent link="${prefix}lj_v7080_frame"/>
+      <child link="${prefix}lj_v7080_optical_frame"/>
    </joint>
+
+   <xacro:if value="$(arg sim_gazebo)">
+      <xacro:gazebo_keyence prefix="${prefix}"/>
+   </xacro:if>
   </xacro:macro>
 </robot>
-

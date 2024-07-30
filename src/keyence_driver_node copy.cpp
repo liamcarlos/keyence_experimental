@@ -12,7 +12,7 @@
 #include <keyence/impl/keyence_exception.h>
 #include <keyence/impl/keyence_tcp_client.h>
 #include <keyence/impl/messages/high_speed_single_profile.h>
-// #include <keyence/impl/messages/change_program.h>
+#include <keyence/impl/messages/change_program.h>
 #include <keyence/impl/messages/get_setting.h>
 #include <keyence/impl/settings_defs.h>
 
@@ -21,7 +21,7 @@
 #include "boost/ref.hpp"
 #include "boost/make_shared.hpp"
 
-// #include "keyence_interfaces/srv/change_program.hpp"
+#include "keyence_interfaces/srv/change_program.hpp"
 
 // keyence protocol / profile related defines
 static const std::string KEYENCE_DEFAULT_TCP_PORT = "24691";
@@ -32,7 +32,7 @@ const static double KEYENCE_INFINITE_DISTANCE_VALUE_SI = -999.9990 / 1e3;
 const static double KEYENCE_INFINITE_DISTANCE_VALUE_SI2 = -999.9970 / 1e3;
 
 // default values for parameters
-const static std::string DEFAULT_FRAME_ID = "lj_v7080_optical_frame";
+const static std::string DEFAULT_FRAME_ID = "sensor_optical_frame";
 
 // local types
 typedef pcl::PointCloud<pcl::PointXYZ> Cloud;
@@ -40,10 +40,8 @@ typedef pcl::PointCloud<pcl::PointXYZ> Cloud;
 // Prototype for function that converts a given profile to
 // a PCL point cloud
 int unpackProfileToPointCloud(const keyence::ProfileInformation& info,
-                              const std::vector<int>& points,
-                              pcl::PointCloud<pcl::PointXYZ>& msg,
-                              bool cnv_inf_pts,
-                              std::shared_ptr<rclcpp::Node> node);
+                              const std::vector<int32_t>& points, Cloud& msg, bool cnv_inf_pts);
+
 
 /**
  * @brief Given a @e client, makes a request to figure out if the given @e program
@@ -169,13 +167,62 @@ double getProgramSamplingRate(keyence::TcpClient& client, uint8_t program)
  * @brief Services external ROS requests to change the active program. Will reset
  * activity flag and sampling rate according to the settings of the new program.
  */
-// bool changeProgramCallback(keyence_interfaces::srv::ChangeProgram::Request& req,
-//                            keyence_interfaces::srv::ChangeProgram::Response& res,
-//                            keyence::TcpClient& client, bool& active_flag,
-//                            rclcpp::Rate& rate)
-// {
-//   // ... (implementation removed) ...
-// }
+bool changeProgramCallback(keyence_interfaces::srv::ChangeProgram::Request& req,
+                           keyence_interfaces::srv::ChangeProgram::Response& res,
+                           keyence::TcpClient& client, bool& active_flag,
+                           rclcpp::Rate& rate)
+{
+  if (req.program_no > keyence::setting::max_program_index)
+  {
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Rejecting program change request: Commanded program index %hhu is out of"
+              " the valid range %hhu to %hhu", req.program_no, keyence::setting::min_program_index,
+              keyence::setting::max_program_index);
+    res.code = res.ERROR_OUT_OF_RANGE;
+    return true;
+  }
+
+  RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Attempting to change keyence program to %hhd", req.program_no);
+
+  try
+  {
+    keyence::command::ChangeProgram::Request cmd(req.program_no);
+    keyence::Client::Response<keyence::command::ChangeProgram::Request> resp =
+        client.sendReceive(cmd);
+
+    if (resp.good())
+    {
+      active_flag = isProgramContinuouslyTriggered(client, req.program_no);
+      double sample_rate = getProgramSamplingRate(client, req.program_no);
+      rclcpp::Rate rate(sample_rate);
+
+      RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Program successfully changed to %hhu with sample freq of %f and"
+               " continuous sampling mode = %hhu", req.program_no, sample_rate,
+               static_cast<uint8_t>(active_flag));
+
+      if (sample_rate > 200.0)
+      {
+        RCLCPP_WARN(rclcpp::get_logger("rclcpp"), "Note that when sampling above 200Hz this driver will likely not keep up");
+      }
+
+      res.code = res.SUCCESS;
+      return true;
+    }
+    else
+    {
+      res.code = res.ERROR_OTHER;
+    }
+
+  } catch (const keyence::KeyenceException& e) // TODO: The exception safety here is suspect
+  {                                            // We could fail on the setting reads after a
+                                               // successful program change.
+    RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Keyence threw exception while processing program change request: %s",
+              e.what());
+    res.code = res.ERROR_OTHER;
+    return true;
+  }
+
+  return false;
+}
 
 
 int main(int argc, char** argv)
@@ -192,7 +239,6 @@ int main(int argc, char** argv)
   std::string frame_id;
   std::string sensor_port;
   double sample_rate;
-  node->declare_parameter<std::string>("controller_ip", "192.168.1.103");
 
   // check required parameters
   if (!node->has_parameter("controller_ip"))
@@ -220,7 +266,6 @@ int main(int argc, char** argv)
   //ros::Publisher pub = nh.advertise<Cloud>("profiles", 100);
   //auto pub = node->create_publisher<Cloud>("profiles", 100);
   auto pub = node->create_publisher<sensor_msgs::msg::PointCloud2>("profiles", 100);
-  //auto pub = node->create_publisher<pcl::PointCloud<pcl::PointXYZ>>("profiles", 100);
 
   bool active_flag = true;
 
@@ -246,11 +291,17 @@ int main(int argc, char** argv)
 
       rclcpp::Rate sleeper (sample_rate);
 
-      // rclcpp::ServiceBase program_server =
+      // rclcpp::ServiceBase program_service override=
       //     node.advertiseService<keyence::command::ChangeProgram::Request,
       //                         keyence::command::ChangeProgram::Response>(
       //         "change_program", boost::bind(changeProgramCallback, boost::placeholders::_1, boost::placeholders::_2, boost::ref(keyence),
       //                                       boost::ref(active_flag), boost::ref(sleeper)));
+
+      // auto program_service = node->create_service<keyence_interfaces::srv::ChangeProgram>(
+      //   "change_program",
+      //   std::bind(&changeProgramCallback, std::placeholders::_1, std::placeholders::_2, std::ref(keyence), std::ref(active_flag), std::ref(sleeper))
+      // );
+
 
       RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Keyence connection established");
       RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Attempting to publish at %.2f Hz.", sample_rate);
@@ -260,7 +311,6 @@ int main(int argc, char** argv)
       while (rclcpp::ok())
       {
         sleeper.sleep();
-        //executor.spin_once();
         executor.spin_some();
 
         // avoid interacting with sensor if there are no publishers
@@ -268,7 +318,7 @@ int main(int argc, char** argv)
         //       publish anything (although unpacking + publishing is cheap)
         if (pub->get_subscription_count() == 0)
         {
-          // RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "No (more) subscribers. Not polling sensor.");
+          RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "No (more) subscribers. Not polling sensor.");
           continue;
         }
 
@@ -291,12 +341,12 @@ int main(int argc, char** argv)
         {
           // convert to pointcloud
           pc_msg->points.clear();
-          unpackProfileToPointCloud(resp.body.profile_info, resp.body.profile_points, *pc_msg, true, node);
+          unpackProfileToPointCloud(resp.body.profile_info, resp.body.profile_points, *pc_msg, true);
 
+          //auto std_pc_msg = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>(*pc_msg);
           sensor_msgs::msg::PointCloud2 ros_cloud;
           pcl::toROSMsg(*pc_msg, ros_cloud);
           // publish pointcloud
-          // pub->publish(*pc_msg);
           pub->publish(ros_cloud);
         }
       } // end main loop
@@ -312,12 +362,8 @@ int main(int argc, char** argv)
   return 0;
 }
 
-int unpackProfileToPointCloud(const keyence::ProfileInformation& info,
-                              const std::vector<int>& points,
-                              pcl::PointCloud<pcl::PointXYZ>& msg,
-                              bool cnv_inf_pts,
-                              std::shared_ptr<rclcpp::Node> node)
-
+int unpackProfileToPointCloud(const keyence::ProfileInformation& info, std::shared_ptr<rclcpp::Node> node,
+                              const std::vector<int32_t>& points, Cloud& msg, bool cnv_inf_pts)
 {
   // TODO: get proper timestamp from somewhere
   // pcl header stamps are in microseconds

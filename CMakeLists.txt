@@ -7,7 +7,7 @@ project(keyence_experimental)
 #set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17") 
 
-
+set(CMAKE_PREFIX_PATH "/opt/ros/humble")
 find_package(ament_cmake REQUIRED)
 
 ## Find catkin macros and libraries
@@ -46,7 +46,6 @@ find_package(libsocket REQUIRED)
 #  DEPENDENCIES
 #  std_msgs
 #)
-
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -106,6 +105,7 @@ target_compile_options(keyence_driver_node PUBLIC -std=c++17)
 ament_target_dependencies(keyence_driver_node
   rclcpp
   pcl_ros
+  std_msgs
   sensor_msgs
   keyence_interfaces
   pcl_conversions
@@ -115,10 +115,8 @@ ament_target_dependencies(keyence_driver_node
 target_link_libraries(
   keyence_driver_node
   keyence_impl
-  rclcpp
-  std_msgs
-  sensor_msgs
 )
+
 
 add_subdirectory(keyence_library)
 
@@ -127,13 +125,16 @@ add_subdirectory(keyence_library)
 #############
 
 ## Mark executables and/or libraries for installation
-install(
-  TARGETS
-  keyence_driver_node
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
+# install(
+#   TARGETS
+#   keyence_driver_node
+#   ARCHIVE DESTINATION lib
+#   LIBRARY DESTINATION lib
+#   RUNTIME DESTINATION bin
+# )
+
+install(TARGETS keyence_driver_node
+  DESTINATION lib/${PROJECT_NAME})
 
 ## Mark cpp header files for installation
 install(
@@ -147,12 +148,9 @@ install(
 install(
   DIRECTORY
   config
-  DESTINATION
-  share/${PROJECT_NAME}
-)
-install(
-  DIRECTORY 
-  launch 
+  launch
+  meshes
+  urdf
   DESTINATION
   share/${PROJECT_NAME}
 )
