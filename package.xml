@@ -26,8 +26,8 @@
   <!-- <depend>roscpp</depend> -->
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
-  <depend>keyence_interfaces</depend>
-  <!-- <depend>std_msgs</depend> -->
+  <!-- <depend>keyence_interfaces</depend>
+  <depend>std_msgs</depend> -->
   <exec_depend>rosidl_default_runtime</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
   <depend>libsocket</depend>
