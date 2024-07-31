@@ -27,7 +27,7 @@ find_package(rclcpp REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(keyence_interfaces REQUIRED)
+# find_package(keyence_interfaces REQUIRED)
 
 ## Driver makes use of the libsocket libraries
 find_package(libsocket REQUIRED)
