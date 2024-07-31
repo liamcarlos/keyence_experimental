@@ -107,7 +107,7 @@ ament_target_dependencies(keyence_driver_node
   pcl_ros
   std_msgs
   sensor_msgs
-  keyence_interfaces
+  # keyence_interfaces
   pcl_conversions
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
 )
