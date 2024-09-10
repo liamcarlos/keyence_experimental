@@ -2,5 +2,4 @@
 <launch>
   <arg name="robot_description_file" default="$(find-pkg-share keyence_experimental)/urdf/lj_v7080.xacro" />
   <arg name="robot_description" default="$(command 'xacro $(var robot_description_file) ros_distro:=$(env ROS_DISTRO)')" />
-  <arg name="sim_gazebo" default="false" />
 </launch>

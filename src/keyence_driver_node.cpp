@@ -4,7 +4,7 @@
 #include <std_msgs/msg/header.hpp> 
 
 #include <pcl/point_types.h>
-#include <pcl_ros/point_cloud.hpp>
+// #include <pcl_ros/point_cloud.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 
 #include <limits>
@@ -192,7 +192,7 @@ int main(int argc, char** argv)
   std::string frame_id;
   std::string sensor_port;
   double sample_rate;
-  node->declare_parameter<std::string>("controller_ip", "192.168.1.103");
+  node->declare_parameter<std::string>("controller_ip", "192.168.1.153");
 
   // check required parameters
   if (!node->has_parameter("controller_ip"))

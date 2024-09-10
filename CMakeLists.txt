@@ -25,9 +25,11 @@ find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-# find_package(keyence_interfaces REQUIRED)
+find_package(keyence_interfaces REQUIRED)
+find_package(PCL REQUIRED)
 
 ## Driver makes use of the libsocket libraries
 find_package(libsocket REQUIRED)
@@ -98,6 +100,22 @@ add_executable(
   src/keyence_driver_node.cpp
 )
 
+add_executable(
+  keyence_reconstruction_node
+  src/point_cloud_reconstruction.cpp
+)
+
+ament_target_dependencies(keyence_reconstruction_node
+sensor_msgs
+visualization_msgs
+rclcpp
+PCL
+pcl_conversions
+)
+
+target_link_libraries(keyence_reconstruction_node
+  ${PCL_LIBRARIES}
+)
 target_compile_features(keyence_driver_node PUBLIC cxx_std_17)
 
 target_compile_options(keyence_driver_node PUBLIC -std=c++17)
@@ -107,7 +125,7 @@ ament_target_dependencies(keyence_driver_node
   pcl_ros
   std_msgs
   sensor_msgs
-  # keyence_interfaces
+  keyence_interfaces
   pcl_conversions
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
 )
@@ -133,7 +151,7 @@ add_subdirectory(keyence_library)
 #   RUNTIME DESTINATION bin
 # )
 
-install(TARGETS keyence_driver_node
+install(TARGETS keyence_driver_node keyence_reconstruction_node
   DESTINATION lib/${PROJECT_NAME})
 
 ## Mark cpp header files for installation
