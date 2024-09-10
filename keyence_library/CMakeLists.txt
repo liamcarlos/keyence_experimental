@@ -16,14 +16,14 @@ target_link_libraries(
 )
 
 # Build test program for changing active program
-add_executable(
-  keyence_change_program
-  src/change_program.cpp
-)
-target_link_libraries(
-  keyence_change_program
-  keyence_impl
-)
+# add_executable(
+#   keyence_change_program
+#   src/change_program.cpp
+# )
+# target_link_libraries(
+#   keyence_change_program
+#   keyence_impl
+# )
 
 # Build test program for single keyence profile
 add_executable(
@@ -52,7 +52,7 @@ target_link_libraries(
 ## Mark executables and/or libraries for installation
 install(
   TARGETS
-  keyence_change_program
+  # keyence_change_program
   keyence_get_profile
   keyence_get_setting
   keyence_impl
